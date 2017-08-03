@@ -5,13 +5,19 @@ from django.contrib.auth.hashers import make_password, check_password
 from datetime import timedelta
 from django.utils import timezone
 from instaclone.settings import BASE_DIR
-
+from clarifai.rest import ClarifaiApp, Image as ClImage
+import requests
 from imgurpython import ImgurClient
+
+YOUR_CLIENT_ID='88e9986738fc1cc'
+YOUR_CLIENT_SECRET ='4097f2780b65ba97493e3b878838fcbf0cf61351'
+PARALLEL_DOTS_KEY = '8yuXGEPkygEXsta5zfGza8JkD9EqleC7guz2xmS2BEE'
+
 
 
 # Create your views here.
 
-def signup_view(request):
+def signup_view(request):  #creaing signup view
     if request.method == "POST":
         form = SignUpForm(request.POST)
         if form.is_valid():
@@ -22,7 +28,7 @@ def signup_view(request):
             # saving data to DB
             user = UserModel(name=name, password=make_password(password), email=email, username=username)
             user.save()
-            return render(request, 'submit.html')
+            return render(request, 'success.html')
             # return redirect('login/')
     else:
         form = SignUpForm()
@@ -30,7 +36,7 @@ def signup_view(request):
     return render(request, 'index.html', {'form': form})
 
 
-def login_view(request):
+def login_view(request):  #creating login view
     response_data = {}
     if request.method == "POST":
         form = LoginForm(request.POST)
@@ -57,7 +63,7 @@ def login_view(request):
     return render(request, 'login.html', response_data)
 
 
-def post_view(request):
+def post_view(request):  #creating post view
     user = check_validation(request)
 
     if user:
@@ -69,14 +75,25 @@ def post_view(request):
                 post = PostModel(user=user, image=image, caption=caption)
                 post.save()
 
-                path = str(BASE_DIR + post.image.url)
+                path = str(BASE_DIR + '/' + post.image.url)
 
-                client = ImgurClient("88e9986738fc1cc","4097f2780b65ba97493e3b878838fcbf0cf61351")
+                client = ImgurClient(YOUR_CLIENT_ID, YOUR_CLIENT_SECRET)
                 post.image_url = client.upload_from_path(path, anon=True)['link']
                 post.save()
+                app = ClarifaiApp(api_key='a8ca205442764466ba6d92f12d696c56')
+                model = app.models.get('e9576d86d2004ed1a38ba0cf39ecb4b1')
+                image = ClImage(url=post.image_url)
+                response = model.predict([image])
+                sfw_value = response['outputs'][0]['data']['concepts'][0]['value']
+                print "The value for SFW is: " , sfw_value
+                nsfw_value = response['outputs'][0]['data']['concepts'][1]['value']
+                print "The value for NSFW is: " , nsfw_value
 
-                return redirect('/feed/')
-
+                if nsfw_value > 0.50:
+                    print "do not show the image"
+                else:
+                    print "show image"
+            return redirect('/feed/')
         else:
             form = PostForm()
         return render(request, 'post.html', {'form': form})
@@ -84,7 +101,7 @@ def post_view(request):
         return redirect('/login/')
 
 
-def feed_view(request):
+def feed_view(request): #creating feed view
     user = check_validation(request)
     if user:
 
@@ -101,7 +118,7 @@ def feed_view(request):
         return redirect('/login/')
 
 
-def like_view(request):
+def like_view(request): #creating like view
     user = check_validation(request)
     if user and request.method == 'POST':
         form = LikeForm(request.POST)
@@ -117,24 +134,88 @@ def like_view(request):
         return redirect('/login/')
 
 
-def comment_view(request):
+def comment_view(request):  #creating comment view
     user = check_validation(request)
+    abuse_msg= "nothing"
     if user and request.method == 'POST':
         form = CommentForm(request.POST)
         if form.is_valid():
             post_id = form.cleaned_data.get('post').id
             comment_text = form.cleaned_data.get('comment_text')
-            comment = CommentModel.objects.create(user=user, post_id=post_id, comment_text=comment_text)
-            comment.save()
-            return redirect('/feed/')
+
+            print checkComment(comment_text)
+            if checkComment(comment_text)==1:
+                comment = CommentModel.objects.create(user=user, post_id=post_id, comment_text=comment_text)
+                comment.save()
+            else:
+                abuse_msg="please use appropriate language"
+            return redirect('/feed/', {'abuse_msg':abuse_msg})
         else:
             return redirect('/feed/')
     else:
         return redirect('/login')
 
+# method for checking if comment is appropriate or abusive
+
+def checkComment(commenttext):  #checking comments
+    req_json= None
+    req_url= "https://apis.paralleldots.com/abuse"
+    payload = {
+        "text": commenttext,
+        "apikey": PARALLEL_DOTS_KEY
+    }
+
+
+# 1 For appropriate words and 0 for abusive words
+
+    try:
+        req_json= requests.post(req_url, payload).json()
+    except:
+        print""
+
+
+    if req_json is not None:
+        #sentiment= req_json['sentiment']
+        print req_json['sentence_type']
+        print req_json['confidence_score']
+        if req_json['sentence_type']=="appropriate":
+            if req_json['confidence_score']> 0.60:
+                return 1
+            else:
+                return 0
+        else:
+            return 0
+
+    return 0
+
+#method to check image
+
+#def checkpic_view():
+#    app= ClarifaiApp(api_key='fb55a24f035040a3a86ed081b89bb64c')
+#    model = app.models.get('general-v1.3')
+#    image = model.predict_by_url(url=post.image_url)
+#
+#method to logout user of his account
+
+def logoutuser_view(request):  #creating logout view
+    user= check_validation(request)
+
+    if user is not None:
+        latest_session= SessionToken.objects.filter(user=user).last()
+        if latest_session:
+            latest_session.delete()
+            return redirect('/login')
+
+def upvote_view(request):  #creating upvote view
+    if request.method=="POST":
+        print 'x'
+
+
+
+
 
 # For validating the session
-def check_validation(request):
+def check_validation(request):  #checking validation of data
     if request.COOKIES.get('session_token'):
         session = SessionToken.objects.filter(session_token=request.COOKIES.get('session_token')).first()
         if session:

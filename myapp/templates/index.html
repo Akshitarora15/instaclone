@@ -2,37 +2,38 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Instagram Clone</title>
+    <title>SOCIAL KIDS</title>
 </head>
-<body>
-	<div class="main">
-            <h1> Instagram Clone</h1>
-            <h3>Sign Up</h3>
+<body style="background-color:cornflowerblue; text-align:center; color:blue; font-family: helvetica;">
+<div class="main">
+    <h1><U><b>SOCIAL KIDS</b></U></h1>
+
+        <h3><B>SIGN UP</B></h3>
     </div>
 
     <div>
         <form method="post">
-              {% csrf_token %}
+            {% csrf_token %}
 
             <div>
                 <label for="username">Username: </label>
                 <input id="username" type="text" name="username" value={{ username }}>
-            </div>
+            </div><br>
 
             <div>
                 <label for="name">Name: </label>
                 <input id="name" type="text" name="name" value={{ name }}>
-            </div>
+            </div><br>
 
             <div>
                 <label for="email">Email: </label>
                 <input id="email" type="text" name="email" value={{ email }}>
-            </div>
+            </div><br>
 
             <div>
                 <label for="password">Password: </label>
                 <input id="password" type="password" name="password" value={{ password }}>
-            </div>
+            </div><br>
                 <input type="submit" value="Sign Up">
         </form>
 
